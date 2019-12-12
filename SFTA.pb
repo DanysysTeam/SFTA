@@ -6,7 +6,7 @@
 ;  Information
 ; 	Author(s)......: Danyfirex & Dany3j
 ; 	Description....: Set Windows 8/10 File Type Association
-; 	Version........: 1.1.0
+; 	Version........: 1.2.0
 ;  Information
 ;
 ;  Resources & Credits
@@ -16,8 +16,14 @@
 
 EnableExplicit
 
+Import "Hash.a"  
+  GenerateHash.i (value1.l, value2.l,value3.l,value4.l) As "_HASH@16" ;Internal Hash Function
+EndImport
 
 Global g_Debug=#False
+
+#SHCNE_ASSOCCHANGED=$8000000
+#SHCNF_IDLIST=0
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;Registry Management
@@ -506,30 +512,6 @@ Interface IApplicationAssociationRegistrationInternal Extends IUnknown
   QueryCurrentDefault(*pszQueryIn,atQueryType.i,alQueryLevel.i,*pszAssociation)
 EndInterface
 
-; ;Interfaca Methods
-; Interface IApplicationAssociationRegistrationInternalW10_1709 Extends IUnknown
-;   ClearUserAssociations()
-;   SetProgIdAsDefault(*pszAppRegistryName,*pszExtension,atQueryType.i)
-;   SetAppAsDefault()
-;   SetAppAsDefaultAll()
-;   QueryAppIsDefault()
-;   QueryAppIsDefaultAll()
-;   QueryCurrentDefault(*pszQueryIn,atQueryType.i,alQueryLevel.i,*pszAssociation)
-; EndInterface
-; 
-; ;Interfaca Methods
-; Interface IApplicationAssociationRegistrationInternalW8_1_63 Extends IUnknown
-;   ClearUserAssociations()
-;   SetProgIdAsDefault(*pszAppRegistryName,*pszExtension,atQueryType.i)
-;   SetAppAsDefault()
-;   SetAppAsDefaultAll()
-;   QueryAppIsDefault()
-;   QueryAppIsDefaultAll()
-;   QueryCurrentDefault(*pszQueryIn,atQueryType.i,alQueryLevel.i,*pszAssociation)
-; EndInterface
-; 
-
-
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;Interface ApllicationAssociationRegistration
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -687,6 +669,283 @@ EndProcedure
 ;Utils Funcions
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;Sid Management
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;By Thunder93
+Prototype ConvertSidToStringSid(Sid, *StringSid)
+Global Lib_Advapi32=0
+Procedure Advapi32_Init()
+  
+  Protected cExt.s
+  Protected Retr.b
+  
+  CompilerIf #PB_Compiler_Unicode : cExt = "W" : CompilerElse : cExt = "A" : CompilerEndIf 
+  
+  Lib_Advapi32 = OpenLibrary(#PB_Any,"Advapi32.dll")
+  If Lib_Advapi32
+    Global ConvertSidToStringSid.ConvertSidToStringSid = GetFunction(Lib_Advapi32,"ConvertSidToStringSid"+cExt)
+    Retr = 1   
+  EndIf
+  
+  ProcedureReturn Retr
+EndProcedure
+
+Procedure Advapi32_End()
+  CloseLibrary(Lib_Advapi32)
+EndProcedure
+
+Procedure.s GetSid(AccountName.s = "")
+  Protected cbSID.l, lDomainName.s, cbDomainName.l, SIDType.i, SID.s
+  
+  If Advapi32_Init() = 0 : Debug "Advapi32_Init failed" : ProcedureReturn "" : EndIf
+  
+  If AccountName = ""
+    Protected lpBuffer.s = Space(#UNLEN+1)
+    Protected lpnSize.l = #UNLEN+1
+    
+    If GetUserName_(@lpBuffer, @lpnSize)
+      AccountName = lpBuffer
+    EndIf   
+  EndIf 
+  
+  
+  If Not LookupAccountName_(0, @AccountName, #Null, @cbSID, #Null, @cbDomainName, @SIDType)
+    If GetLastError_() = #ERROR_INSUFFICIENT_BUFFER
+      
+      Protected *ptrSid = AllocateMemory(cbSid)
+      If Not *ptrSid : Debug "*ptrSid memory allocation failed" : ProcedureReturn "" : EndIf
+      
+      lDomainName = Space(cbDomainName)
+      
+      If LookupAccountName_(0, @AccountName, *ptrSid, @cbSID, @lDomainName, @cbDomainName, @SIDType)       
+        Protected StringSid.l=0
+        If ConvertSidToStringSid(*ptrSid, @StringSid)
+          FreeMemory(*ptrSid)
+          
+          SID = PeekS(StringSid)
+          LocalFree_(StringSid)
+        EndIf
+        
+        ProcedureReturn SID       
+      EndIf
+    EndIf
+  EndIf
+  
+  Advapi32_End()
+EndProcedure
+
+Procedure.s GetComputerName()
+  Protected buffer.s=Space(64), bufsize.l=64
+  GetComputerName_(@buffer, @bufsize)
+  
+  ProcedureReturn buffer
+EndProcedure
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;Sid Management
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;Search User Choice set via Windows User Experience String Shell32
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+Procedure.s GetSpecialFolder(iCSIDL)
+  Protected sPath.s = Space(#MAX_PATH)
+  If SHGetSpecialFolderPath_(#Null, @sPath, iCSIDL, 0) = #True
+    ProcedureReturn sPath
+  Else
+    ProcedureReturn ""
+  EndIf
+EndProcedure
+
+Procedure.s GetShell32FilePath()
+  ProcedureReturn GetSpecialFolder(#CSIDL_SYSTEMX86) + "\Shell32.dll"
+EndProcedure
+
+
+Procedure FindStringInMemory(String.s, Memory, MemoryLength)
+  Protected L = Len(String)
+  Protected I=0
+  For I = 0 To MemoryLength-L
+    If CompareMemory(@String, Memory+I, L)
+      ProcedureReturn I
+    EndIf
+  Next
+  ProcedureReturn -1
+EndProcedure
+
+
+Procedure.s GetExperienceString()
+  #MEMSIZE = 1024 * 1024 * 5 ;Read 5 MB This should be enough to search the Experience String
+  Protected Shell32Path$=GetShell32FilePath() 
+  Protected   sExperienceBase$= "User Choice set via Windows User Experience"  
+  If ReadFile(0, Shell32Path$, #PB_File_SharedRead)
+    Protected Length.l = #MEMSIZE ;Lof(0)                 
+    Protected *MemoryID = AllocateMemory(Length.l)         ; allocate the needed memory
+    If *MemoryID
+      Protected bytes = ReadData(0, *MemoryID, Length.l)   ; read to allocated memory
+    EndIf
+    CloseFile(0)
+  EndIf
+  Protected Offset.l=FindStringInMemory(sExperienceBase$,*MemoryID,Length.l)
+  If    Offset.l>-1 
+    DebugPrint("Experience String Found")
+    ProcedureReturn PeekS(*MemoryID+Offset.l,-1,#PB_Unicode)
+  Else
+    ProcedureReturn ""
+  EndIf 
+EndProcedure
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;Search User Choice set via Windows User Experience String Shell32
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;Create ProgId Hash
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+Procedure HexStr2ToByteArray (Array Out.a (1), Hex$)
+  Protected t$ = "$  "
+  Protected *c.Character = @Hex$
+  Protected pg, p = 1
+  Protected out_len = Len(Hex$) : out_len + out_len % 2 : out_len * 0.5 - Bool(out_len)
+  ReDim Out(out_len)
+  While *c\c
+    If p > 2
+      Out(pg) = Val(t$)
+      PokeC(@t$ + SizeOf(Character), 0)
+      PokeC(@t$ + SizeOf(Character) * 2, 0)
+      p = 1
+      pg + 1
+    EndIf
+    PokeC(@t$ + p * SizeOf(Character), *c\c)
+    p + 1
+    *c + SizeOf(Character)
+  Wend
+  Out(pg) = Val(t$)
+  ProcedureReturn ArraySize(Out())
+EndProcedure
+
+Procedure.s MD5Digest(sText$, fmt = #PB_Unicode)
+  Protected iLen.l=(Len(sText$)*2)+2
+  ;Debug Len(sText$)
+  ;Debug iLen
+  Protected *pWStr=AllocateMemory(iLen)
+  PokeS(*pWStr,sText$,-1,fmt)
+  ProcedureReturn Fingerprint(*pWStr,iLen,#PB_Cipher_MD5)
+EndProcedure
+
+
+Procedure.s GenerateDate()
+  Protected User32.l = OpenLibrary(#PB_Any, "user32.dll")
+  Protected *pFunction = GetFunction(User32.l, "wsprintfW")
+  
+  Protected SysTime.SYSTEMTIME
+  GetSystemTime_(SysTime)
+  SysTime\wSecond=0
+  SysTime\wMilliseconds=0
+  
+  Protected FiTime.FILETIME
+  SystemTimeToFileTime_(SysTime,FiTime)
+  
+  Protected szBuffer$ = Space(16)
+  Protected szFormat$= "%08x%08x"
+  
+  If *pFunction
+    CallCFunctionFast(*pFunction, @szBuffer$, @szFormat$,FiTime\dwHighDateTime,FiTime\dwLowDateTime)
+  EndIf
+  
+  ProcedureReturn  szBuffer$
+EndProcedure
+
+Procedure.s CreateProgIdHash(sExt$,sProgId$)
+  UseMD5Fingerprint()
+  
+  Protected sUserSid$=GetSid()
+  Protected sDate$=GenerateDate()
+  Protected sUserExperience$=GetExperienceString()
+  
+  ;   Debug sUserSid$
+  ;   Debug sExt$
+  ;   Debug sProgId$
+  ;   Debug sDate$
+  
+  Protected sData$=sExt$ + sUserSid$ + sProgId$ + sDate$ +sUserExperience$
+  sData$=LCase(sData$)
+  ;   Debug sData$
+  
+  ;Create MD5 Digest
+  Protected sMD5Digest$=MD5Digest(sData$)
+  ;Debug sMD5Digest$
+  
+  Protected Dim aMD5DigestBytes.a(0)
+  HexStr2ToByteArray(aMD5DigestBytes(), sMD5Digest$)
+  ;ShowMemoryViewer(aMD5DigestBytes(),16)
+  
+  ;Create lpBuffer
+  Protected iLen.l=(Len(sData$)*2)+2
+  Protected *pWStr=AllocateMemory(iLen.l)
+  PokeS(*pWStr,sData$,-1,#PB_Unicode)
+  ;ShowMemoryViewer(*pWStr,iLen.l)
+  
+  Protected Dim aOutBytes.i(1);8 Bytes
+  GenerateHash(*pWStr,iLen.l,aMD5DigestBytes(),aOutBytes())
+  ;ShowMemoryViewer(aOutBytes(),8)
+  
+  ;Debug aOutBytes(0)
+  ;Debug aOutBytes(1)
+  ProcedureReturn Base64Encoder(aOutBytes(), 8)
+EndProcedure
+
+Procedure DeleteHashRegistryKey(sExt$,iForceBit = 0)
+  Protected sHashKeyParent$="HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Explorer\FileExts\" + sExt$ + "\UserChoice"
+  Protected h.i, rootKey.i, subkey.s
+  
+  rootKey = RegRoot(sHashKeyParent$)
+  subKey = RegSub(sHashKeyParent$)
+  If iForceBit = 32
+    iForceBit = #KEY_WOW64_32KEY
+  ElseIf iForceBit = 64
+    iForceBit = #KEY_WOW64_64KEY
+  EndIf
+  If RegOpenKeyEx_(rootKey, subKey, 0, #KEY_READ, @h) = #ERROR_SUCCESS
+    ProcedureReturn Reg_DeleteKey(rootKey,subKey)
+  EndIf 
+EndProcedure
+
+Procedure WriteProgIdAndHash(sProgId$,sHash$,sExt$)
+  RegWrite("HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Explorer\FileExts\" + sExt$ + "\UserChoice","Hash",sHash$,#REG_SZ) 
+  RegWrite("HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Explorer\FileExts\" + sExt$ + "\UserChoice","ProgId",sProgId$,#REG_SZ)
+  Protected sReadHash$=RegRead("HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Explorer\FileExts\" + sExt$ + "\UserChoice","Hash")
+  Protected sReadProgId$= RegRead("HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Explorer\FileExts\" + sExt$ + "\UserChoice","ProgId")
+  
+  If    (sProgId$=sReadProgId$) And (sHash$=sReadHash$)
+     DebugPrint("Write Reg UserChoice OK")
+    ProcedureReturn #True
+  Else
+      DebugPrint("Write Reg UserChoice FAIL")
+    ProcedureReturn #False
+  EndIf 
+  
+EndProcedure
+
+Procedure SetFileTypeAssociation(sExt$,sProgId$)
+  Define sProgIdHash$=CreateProgIdHash(sExt$,sProgId$ )
+  DebugPrint("Hash: " + sProgIdHash$)
+  If Not DeleteHashRegistryKey(sExt$) 
+    DebugPrint("Unable To Delete UserChoice")
+  EndIf 
+  If   WriteProgIdAndHash(sProgId$,sProgIdHash$,sExt$) 
+    SHChangeNotify_(#SHCNE_ASSOCCHANGED,#SHCNF_IDLIST,#NUL,#NUL) ;Refresh
+    ProcedureReturn #True
+  EndIf 
+  ProcedureReturn #False
+EndProcedure
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;Create ProgId Hash
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;SFTA Funcions
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -697,7 +956,7 @@ Procedure PrintHelp()
   PrintN("##   |__/ (_| | ) \/ _) \/ _)   ##")
   PrintN("##                /     /       ##")
   PrintN("##     © 2019 Danysys.com       ##")
-  PrintN("##        SFTA v.1.1.0          ##")
+  PrintN("##        SFTA v.1.2.0          ##")
   PrintN("##################################")
   PrintN("")
   PrintN("OPTIONS:")
@@ -796,7 +1055,7 @@ Procedure SetFTA(ProgramId.s,Extension.s)
   CoInitialize_(#Null)
   Protected oARI.IApplicationAssociationRegistrationInternal 
   
-   If  IsWindows8_1() 
+  If  IsWindows8_1() 
     DebugPrint("Is Windows 8.1")
     result=CoCreateInstance_(?CLSID_ApplicationAssociationRegistration,#Null,#CLSCTX_INPROC_SERVER,?IID_IApplicationAssociationRegistrationInternalW8_1_63,@oARI) 
     If  result= #S_OK 
@@ -817,8 +1076,9 @@ Procedure SetFTA(ProgramId.s,Extension.s)
         DebugPrint("Created Interface W10_1511")
       EndIf 
     EndIf 
+    
+    
   EndIf 
-  
   
   If result = #S_OK
     DebugPrint("OK AssociationRegistration Instance")
@@ -827,6 +1087,17 @@ Procedure SetFTA(ProgramId.s,Extension.s)
   Else
     DebugPrint("FAIL AssociationRegistration Instance")
   EndIf
+  
+  ;If All above Failed Try New Method
+  If  result<> #S_OK 
+    If  SetFileTypeAssociation(Extension.s,ProgramId.s)  
+      DebugPrint("SetFileTypeAssociation Hash Method OK")
+    Else
+      DebugPrint("SetFileTypeAssociation Hash Method FAIL")
+    EndIf 
+  EndIf 
+  
+  
   
   CoUninitialize_()
 EndProcedure
@@ -1011,9 +1282,9 @@ EndIf
 
 ; IDE Options = PureBasic 5.62 (Windows - x86)
 ; ExecutableFormat = Console
-; CursorPosition = 750
-; FirstLine = 652
-; Folding = -------
+; CursorPosition = 1281
+; FirstLine = 1078
+; Folding = ----------
 ; EnableXP
 ; UseIcon = Icon.ico
 ; Executable = ..\Compiled\SFTA.exe
