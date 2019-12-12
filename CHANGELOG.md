@@ -6,6 +6,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## 1.2.0 - 2019-12-12
+
+### Added
+- Add Hash Algorithm Method to handle  the latest Versions of Windows 10
+
 
 ## 1.1.0 - 2019-08-07
 
