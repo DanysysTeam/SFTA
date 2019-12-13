@@ -1,6 +1,6 @@
 # SFTA
 
-[![Latest Version](https://img.shields.io/badge/Latest-v1.2.0-green.svg)]()
+[![Latest Version](https://img.shields.io/badge/Latest-v1.2.1-green.svg)]()
 [![MIT License](https://img.shields.io/github/license/mashape/apistatus.svg)]()
 [![Made with Love](https://img.shields.io/badge/Made%20with-%E2%9D%A4-red.svg?colorB=11a9f7)]()
 
@@ -11,6 +11,7 @@ Set File Type Association Default Application Command Line Windows 10
 ## Features
 * Set File Type Association.
 * Get File Type Association.
+* List File Type Association.
 * Register Application.
 * Unregister Application.
 

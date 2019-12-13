@@ -6,14 +6,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## 1.2.0 - 2019-12-12
+## 1.2.1 - 2019-12-13
+### Added
+- Add --list Show All Application Program Id
 
+### Fixed
+- Fix --get command
+
+
+## 1.2.0 - 2019-12-12
 ### Added
 - Add Hash Algorithm Method to handle  the latest Versions of Windows 10
 
 
 ## 1.1.0 - 2019-08-07
-
 ### Added
 - Add --reg Register Application Program Id
 - Add --unreg Unregister Application Program Id
