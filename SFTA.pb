@@ -6,7 +6,7 @@
 ;  Information
 ; 	Author(s)......: Danyfirex & Dany3j
 ; 	Description....: Set Windows 8/10 File Type Association
-; 	Version........: 1.2.0
+; 	Version........: 1.2.1
 ;  Information
 ;
 ;  Resources & Credits
@@ -20,6 +20,7 @@ Import "Hash.a"
   GenerateHash.i (value1.l, value2.l,value3.l,value4.l) As "_HASH@16" ;Internal Hash Function
 EndImport
 
+#SFTA_VERSION="1.2.1"
 Global g_Debug=#False
 
 #SHCNE_ASSOCCHANGED=$8000000
@@ -956,13 +957,13 @@ Procedure PrintHelp()
   PrintN("##   |__/ (_| | ) \/ _) \/ _)   ##")
   PrintN("##                /     /       ##")
   PrintN("##     © 2019 Danysys.com       ##")
-  PrintN("##        SFTA v.1.2.0          ##")
+  PrintN("##        SFTA v."+ #SFTA_VERSION +"          ##")
   PrintN("##################################")
   PrintN("")
   PrintN("OPTIONS:")
   PrintN("")
   PrintN("-h, --help        Show Help")
-  ;PrintN("-l, --list        Show All Application Program Id")
+  PrintN("-l, --list        Show All Application Program Id")
   PrintN("-g, --get         Show Default Application Program Id for an Extension")
   PrintN("      Parameters: [.Extension]")
   PrintN("-r, --reg         Register Application Program Id for an Extension and Set File Type Association")
@@ -998,13 +999,39 @@ Procedure ShowWindowsInformation()
   PrintN("Windows ProductName: " + GetWindowsProductName())
 EndProcedure
 
+Procedure.s GetAssocType(sExt$)
+  Protected ProgId$=RegRead("HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Explorer\FileExts\" + sExt$ + "\UserChoice", "ProgId")
+  PrintN(ProgId$)
+  End 0
+EndProcedure
 
-Procedure ListProgramIDs()
-  PrintN("ListProgramIDs")
+Procedure ListAssocTypeProgIds()
+  Protected Key$="Software\Microsoft\Windows\CurrentVersion\Explorer\FileExts"
+  Protected Index.l=1
+  Protected SubKey$=""
+  Protected KeyUserChoice$=""
+  Protected ProgId$=""
+  
+  While 1
+    SubKey$ = Reg_ListSubKey(#HKEY_CURRENT_USER, Key$, Index.l)
+    If  SubKey$="" 
+      Break 
+    EndIf 
+    KeyUserChoice$=Key$ + "\" + SubKey$ + "\UserChoice"
+    ProgId$=RegRead("HKEY_CURRENT_USER\" + KeyUserChoice$, "ProgId")
+    If   ProgId$ 
+      PrintN(SubKey$  + ", " + ProgId$)
+    EndIf
+    Index.l=Index.l+1
+  Wend
+  End 0
 EndProcedure
 
 Procedure GetFTA(Extension.s)
   Define result.l=-1
+  GetAssocType(Extension.s)
+  ProcedureReturn
+  ;Not used Interface for getting
   CoInitialize_(#Null)
   Protected oARI.IApplicationAssociationRegistrationInternal 
   
@@ -1180,7 +1207,7 @@ Procedure Start()
   EndIf 
   
   If  iNumberOfParameters=1
-    If Not IsValidParameter(ProgramParameter(0),"-h|--help|-g|-get")
+    If Not IsValidParameter(ProgramParameter(0),"-h|--help|-g|-get|-l|--list")
       PrintN("Invalid Parameter")
       PrintHelp() 
       End 1
@@ -1200,10 +1227,10 @@ Procedure Start()
     ShowWindowsInformation()
   EndIf
   
-  ;   If  iNumberOfParameters=1 And (ProgramParameter(0)="-l" Or ProgramParameter(0)="--list") ;validate -l parameter
-  ;     ListProgramIDs()
-  ;     End 0
-  ;   EndIf
+  If (ProgramParameter(0)="-l" Or ProgramParameter(0)="--list")  ;validate -l parameter
+    ListAssocTypeProgIds()
+    End 0
+  EndIf
   
   If  (ProgramParameter(0)="-g" Or ProgramParameter(0)="--get") ;validate -g parameter
     GetFTA(ProgramParameter(1))
@@ -1279,11 +1306,10 @@ If OpenConsole()
   CheckValidOS()
   Start()
 EndIf
-
 ; IDE Options = PureBasic 5.62 (Windows - x86)
 ; ExecutableFormat = Console
-; CursorPosition = 1281
-; FirstLine = 1078
+; CursorPosition = 1307
+; FirstLine = 1279
 ; Folding = ----------
 ; EnableXP
 ; UseIcon = Icon.ico
