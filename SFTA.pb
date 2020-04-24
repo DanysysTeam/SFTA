@@ -20,7 +20,7 @@ Import "Hash.a"
   GenerateHash.i (value1.l, value2.l,value3.l,value4.l) As "_HASH@16" ;Internal Hash Function
 EndImport
 
-#SFTA_VERSION="1.2.1"
+#SFTA_VERSION="1.3.0"
 Global g_Debug=#False
 
 #SHCNE_ASSOCCHANGED=$8000000
@@ -472,62 +472,6 @@ EndProcedure
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;Interface ApllicationAssociationRegistration
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-Enumeration  ASSOCIATIONLEVEL 
-  #AL_MACHINE
-  #AL_EFFECTIVE
-  #AL_USER
-EndEnumeration
-
-Enumeration ASSOCIATIONTYPE
-  #AT_FILEEXTENSION
-  #AT_URLPROTOCOL
-  #AT_STARTMENUCLIENT
-  #AT_MIMETYPE
-EndEnumeration
-
-;Interface Information
-DataSection 
-  CLSID_ApplicationAssociationRegistration:
-  Data.i $591209c7
-  Data.w $767b
-  Data.w $42b2
-  Data.b $9f,$ba,$44,$ee,$46,$15,$f2,$c7
-  IID_IApplicationAssociationRegistrationInternalW10_1709:
-  Data.i $14EBCC88
-  Data.w $2831
-  Data.w $4FC8
-  Data.b $A5,$DF,$9F,$36,$A8,$1D,$B1,$2C
-  IID_IApplicationAssociationRegistrationInternalW10_1511: ;Thanks to Mehdi
-  Data.i $229D59E2
-  Data.w $F94A
-  Data.w $402E
-  Data.b $9A,$9F,$3B,$84,$A1,$AC,$ED,$77
-  IID_IApplicationAssociationRegistrationInternalW8_1_63:
-  Data.i $C7225171
-  Data.w $B9A7
-  Data.w $4CF7
-  Data.b $86,$1F,$85,$AB,$7B,$A3,$C5,$B2
-EndDataSection
-
-Interface IApplicationAssociationRegistrationInternal Extends IUnknown
-  ClearUserAssociations()
-  SetProgIdAsDefault(*pszAppRegistryName,*pszExtension,atQueryType.i)
-  SetAppAsDefault()
-  SetAppAsDefaultAll()
-  QueryAppIsDefault()
-  QueryAppIsDefaultAll()
-  QueryCurrentDefault(*pszQueryIn,atQueryType.i,alQueryLevel.i,*pszAssociation)
-EndInterface
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;Interface ApllicationAssociationRegistration
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;Debug Funcions
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 Procedure EnableDisableDebug()
@@ -608,10 +552,10 @@ Procedure.i IsWindows10()
   ProcedureReturn Bool(OSVersion()=#PB_OS_Windows_10)
 EndProcedure
 
-
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;OS Information Funcions
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;Utils Funcions
@@ -626,15 +570,15 @@ Procedure.i FileExist(FilePath.s)
   ProcedureReturn Bool(Result.q>0 And Extension.s="exe")
 EndProcedure
 
-Procedure.s CreateApplicationID(FilePath.s)
+Procedure.s CreateApplicationID(FilePath.s,FileExt.s)
   Protected ApplicationID.s=""
   If  Not  FileExist(FilePath.s) 
     DebugPrint("ERROR Unable to find " + QuoteString(FilePath.s))
     PrintN("Error File not Found " + QuoteString(FilePath.s))
     ProcedureReturn  ApplicationID.s
   EndIf
-  Protected ApplicationName.s=GetFilePart(FilePath.s,#PB_FileSystem_NoExtension)
-  ApplicationID.s="SFTA." + ApplicationName.s + ".Application"
+  Protected ApplicationName.s=ReplaceString(GetFilePart(FilePath.s,#PB_FileSystem_NoExtension)," ","")
+  ApplicationID.s="SFTA." + ApplicationName.s + FileExt.s
   ProcedureReturn  ApplicationID.s
 EndProcedure
 
@@ -649,7 +593,6 @@ Procedure.i RunCmdCommand(Parameter.s="",CurrentDir.s="")
   Protected ExitCode=RunWait(CmdPath.s,Parameter.s,CurrentDir.s,#PB_Program_Open | #PB_Program_Wait|#PB_Program_Hide)
   ProcedureReturn ExitCode
 EndProcedure
-
 
 Procedure.i IsAdmin()
   ProcedureReturn IsUserAdmin_()
@@ -673,6 +616,10 @@ Procedure CheckValidOS()
     PrintN("Error. It is not a Windows 8/10 OS")
     End 2
   EndIf
+EndProcedure
+
+Procedure.b IsFileType(String.s)
+  ProcedureReturn Bool(FindString(String.s,".")>0)
 EndProcedure
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;Utils Funcions
@@ -906,6 +853,23 @@ Procedure.s CreateProgIdHash(sExt$,sProgId$)
   ProcedureReturn Base64Encoder(aOutBytes(), 8)
 EndProcedure
 
+
+Procedure DeleteProtocolHashRegistryKey(sProtocol$,iForceBit = 0)
+  Protected sHashKeyParent$="HKEY_CURRENT_USER\Software\Microsoft\Windows\Shell\Associations\UrlAssociations\" + sProtocol$ + "\UserChoice"
+  Protected h.i, rootKey.i, subkey.s
+  
+  rootKey = RegRoot(sHashKeyParent$)
+  subKey = RegSub(sHashKeyParent$)
+  If iForceBit = 32
+    iForceBit = #KEY_WOW64_32KEY
+  ElseIf iForceBit = 64
+    iForceBit = #KEY_WOW64_64KEY
+  EndIf
+  If RegOpenKeyEx_(rootKey, subKey, 0, #KEY_READ, @h) = #ERROR_SUCCESS
+    ProcedureReturn Reg_DeleteKey(rootKey,subKey)
+  EndIf 
+EndProcedure
+
 Procedure DeleteHashRegistryKey(sExt$,iForceBit = 0)
   Protected sHashKeyParent$="HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Explorer\FileExts\" + sExt$ + "\UserChoice"
   Protected h.i, rootKey.i, subkey.s
@@ -922,6 +886,23 @@ Procedure DeleteHashRegistryKey(sExt$,iForceBit = 0)
   EndIf 
 EndProcedure
 
+
+Procedure WriteProtocolProgIdAndHash(sProgId$,sHash$,sProtocol$)
+  RegWrite("HKEY_CURRENT_USER\Software\Microsoft\Windows\Shell\Associations\UrlAssociations\" + sProtocol$ + "\UserChoice","Hash",sHash$,#REG_SZ) 
+  RegWrite("HKEY_CURRENT_USER\Software\Microsoft\Windows\Shell\Associations\UrlAssociations\" + sProtocol$ + "\UserChoice","ProgId",sProgId$,#REG_SZ)
+  Protected sReadHash$=RegRead("HKEY_CURRENT_USER\Software\Microsoft\Windows\Shell\Associations\UrlAssociations\" + sProtocol$ + "\UserChoice","Hash")
+  Protected sReadProgId$= RegRead("HKEY_CURRENT_USER\Software\Microsoft\Windows\Shell\Associations\UrlAssociations\" + sProtocol$ + "\UserChoice","ProgId")
+  
+  If    (sProgId$=sReadProgId$) And (sHash$=sReadHash$)
+     DebugPrint("Write Protocol Reg UserChoice OK")
+    ProcedureReturn #True
+  Else
+      DebugPrint("Write Protocol Reg UserChoice FAIL")
+    ProcedureReturn #False
+  EndIf 
+EndProcedure
+
+
 Procedure WriteProgIdAndHash(sProgId$,sHash$,sExt$)
   RegWrite("HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Explorer\FileExts\" + sExt$ + "\UserChoice","Hash",sHash$,#REG_SZ) 
   RegWrite("HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Explorer\FileExts\" + sExt$ + "\UserChoice","ProgId",sProgId$,#REG_SZ)
@@ -935,7 +916,19 @@ Procedure WriteProgIdAndHash(sProgId$,sHash$,sExt$)
       DebugPrint("Write Reg UserChoice FAIL")
     ProcedureReturn #False
   EndIf 
-  
+EndProcedure
+
+Procedure SetProtocolAssociation(sProtocol$,sProgId$)
+  Define sProgIdHash$=CreateProgIdHash(sProtocol$,sProgId$ )
+  DebugPrint("Hash: " + sProgIdHash$)
+  If Not DeleteProtocolHashRegistryKey(sProtocol$) 
+    DebugPrint("Unable To Delete Protocol UserChoice")
+  EndIf 
+  If   WriteProtocolProgIdAndHash(sProgId$,sProgIdHash$,sProtocol$) 
+    SHChangeNotify_(#SHCNE_ASSOCCHANGED,#SHCNF_IDLIST,#NUL,#NUL) ;Refresh
+    ProcedureReturn #True
+  EndIf 
+  ProcedureReturn #False
 EndProcedure
 
 Procedure SetFileTypeAssociation(sExt$,sProgId$)
@@ -977,7 +970,9 @@ Procedure PrintHelp()
   PrintN("-r, --reg         Register Application Program Id for an Extension and Set File Type Association")
   PrintN("      Parameters: [ApplicationFullPath] [.Extension] [ProgramId-Optional]")
   PrintN("-u, --unreg       Unregister Application Program Id")
-  PrintN("      Parameters: [ApplicationFullPath|Program Id]")
+  PrintN("      Parameters: [ApplicationFullPath|Program Id] [.Extension]")
+  PrintN("-i, --icon       Set Application Association Icon")
+  PrintN("      Parameters: [Icon Path]")
   PrintN("-d, --debug       Show Debug Information")
   PrintN("")
   PrintN("Usage:")
@@ -987,14 +982,21 @@ Procedure PrintHelp()
   PrintN("")
   PrintN("   Set File Type Association")
   PrintN(~"   SFTA.exe \"My.Program.Id\" \".txt\"")
+  PrintN(~"   SFTA.exe \"My.Program.Id\" \".txt\" -i \"shell32.dll,100\"")
+  PrintN("")
+  PrintN("   Set Protocol Association")
+  PrintN(~"   SFTA.exe \"My.Program.Id\" \"http\"")
   PrintN("")
   PrintN("   Register Application + Set File Type Association")
   PrintN(~"   SFTA.exe --reg \"C:\\SumatraPDF.exe\" \".PDF\"")
   PrintN(~"   SFTA.exe --reg \"C:\\SumatraPDF.exe\" \".PDF\" \"CustomProgramId\"")
   PrintN("")
+  PrintN("   Register Application + Set Protocol Association")
+  PrintN(~"   SFTA.exe --reg \"C:\\SumatraPDF.exe\" \"http\"")
+  PrintN("")
   PrintN("   Unregister Application")
-  PrintN(~"   SFTA.exe --unreg \"C:\\SumatraPDF.exe\"")
-  PrintN(~"   SFTA.exe --unreg \"CustomProgramId\"")
+  PrintN(~"   SFTA.exe --unreg \"C:\\SumatraPDF.exe\" \".PDF\"")
+  PrintN(~"   SFTA.exe --unreg \"CustomProgramId\" \".PDF\"")
   PrintN("")
   
   
@@ -1036,180 +1038,116 @@ Procedure ListAssocTypeProgIds()
 EndProcedure
 
 Procedure GetFTA(Extension.s)
-  Define result.l=-1
   GetAssocType(Extension.s)
-  ProcedureReturn
-  ;Not used Interface for getting
-  CoInitialize_(#Null)
-  Protected oARI.IApplicationAssociationRegistrationInternal 
-  
-  If  IsWindows8_1() 
-    DebugPrint("Is Windows 8.1")
-    result=CoCreateInstance_(?CLSID_ApplicationAssociationRegistration,#Null,#CLSCTX_INPROC_SERVER,?IID_IApplicationAssociationRegistrationInternalW8_1_63,@oARI) 
-    If  result= #S_OK 
-      DebugPrint("Created Interface W8_1_63")
-    EndIf 
-  EndIf
-  
-  If  IsWindows10() 
-    DebugPrint("Is Windows 10")
-    result=CoCreateInstance_(?CLSID_ApplicationAssociationRegistration,#Null,#CLSCTX_INPROC_SERVER,?IID_IApplicationAssociationRegistrationInternalW10_1709,@oARI) 
-    If  result= #S_OK 
-      DebugPrint("Created Interface W10_1709")
-    EndIf 
-    
-    If  result<> #S_OK 
-      result=CoCreateInstance_(?CLSID_ApplicationAssociationRegistration,#Null,#CLSCTX_INPROC_SERVER,?IID_IApplicationAssociationRegistrationInternalW10_1511,@oARI) 
-      If  result= #S_OK 
-        DebugPrint("Created Interface W10_1511")
-      EndIf 
-    EndIf 
-  EndIf 
-  
-  If result = #S_OK
-    DebugPrint("OK AssociationRegistration Instance")
-    Define *pAssociatedApp  = AllocateMemory(1024) 
-    result=oARI\QueryCurrentDefault(@Extension.s,#AT_FILEEXTENSION,#AL_EFFECTIVE,@*pAssociatedApp)
-    DebugPrint("AssociationRegistration Get Return = " + Str(result))
-    Define AssociatedApp.s=PeekS(*pAssociatedApp)
-    If  AssociatedApp=""
-      AssociatedApp="Extension Has Not Associated Application"
-    EndIf 
-    PrintN(AssociatedApp)
-    CoUninitialize_()
-    End 0
-  EndIf 
-  DebugPrint("FAIL AssociationRegistration Instance")
-  PrintN("Error. Unable To Query Associated Application")
-  End 1
 EndProcedure
 
-
-Procedure SetFTA(ProgramId.s,Extension.s)
+Procedure SetAssociation(ProgramId.s,Extension.s)
   Define result.l
-  CoInitialize_(#Null)
-  Protected oARI.IApplicationAssociationRegistrationInternal 
-  
-  If  IsWindows8_1() 
-    DebugPrint("Is Windows 8.1")
-    result=CoCreateInstance_(?CLSID_ApplicationAssociationRegistration,#Null,#CLSCTX_INPROC_SERVER,?IID_IApplicationAssociationRegistrationInternalW8_1_63,@oARI) 
-    If  result= #S_OK 
-      DebugPrint("Created Interface W8_1_63")
-    EndIf 
-  EndIf
-  
-  If  IsWindows10() 
-    DebugPrint("Is Windows 10")
-    result=CoCreateInstance_(?CLSID_ApplicationAssociationRegistration,#Null,#CLSCTX_INPROC_SERVER,?IID_IApplicationAssociationRegistrationInternalW10_1709,@oARI) 
-    If  result= #S_OK 
-      DebugPrint("Created Interface W10_1709")
-    EndIf 
-    
-    If  result<> #S_OK 
-      result=CoCreateInstance_(?CLSID_ApplicationAssociationRegistration,#Null,#CLSCTX_INPROC_SERVER,?IID_IApplicationAssociationRegistrationInternalW10_1511,@oARI) 
-      If  result= #S_OK 
-        DebugPrint("Created Interface W10_1511")
-      EndIf 
-    EndIf 
-    
-    
-  EndIf 
-  
-  If result = #S_OK
-    DebugPrint("OK AssociationRegistration Instance")
-    result=oARI\SetProgIdAsDefault(@ProgramId.s,@Extension.s,#AT_FILEEXTENSION)
-    DebugPrint("AssociationRegistration Set Return = " + Str(result))
-  Else
-    DebugPrint("FAIL AssociationRegistration Instance")
-  EndIf
-  
-  ;If All above Failed Try New Method
-  If  result<> #S_OK 
-    If  SetFileTypeAssociation(Extension.s,ProgramId.s)  
-      DebugPrint("SetFileTypeAssociation Hash Method OK")
+  If  IsFileType(Extension.s)
+    If  SetFileTypeAssociation(Extension.s,ProgramId.s)   ;set FTA
+      DebugPrint("SetFileTypeAssociation OK")
     Else
-      DebugPrint("SetFileTypeAssociation Hash Method FAIL")
+      DebugPrint("SetFileTypeAssociation FAIL")
     EndIf 
+Else
+  If  SetProtocolAssociation(Extension.s,ProgramId.s)  ;set PA
+    DebugPrint("SetProtocolAssociation OK")
+  Else
+    DebugPrint("SetProtocolAssociation FAIL")
   EndIf 
+EndIf 
+EndProcedure
+
+Procedure.b IsNumeric(string.s) ;Returns 1 if numeric else 0 for any non numeric values
+   Protected iRegex = CreateRegularExpression(#PB_Any, "\D"),bParam = Bool(Not MatchRegularExpression(iRegex, string))
+   FreeRegularExpression(iRegex)
+   ProcedureReturn bParam
+ EndProcedure
+ 
+Procedure.s GetIconFromCommandLine()
+  Protected iNumberOfParameters.i = CountProgramParameters()
+  Protected i
   
-  
-  
-  CoUninitialize_()
+  For i=0 To iNumberOfParameters.i-1
+    If  ProgramParameter(i)="-i" Or ProgramParameter(i)="--icon"
+      Break
+    EndIf  
+  Next
+  i=i+1
+  If  i>iNumberOfParameters
+    ProcedureReturn ""
+  Else
+    Protected IconPath.s=ProgramParameter(i)
+    If   IsNumeric(IconPath.s)
+      ;Get Application Path and Append the Index - No implemented
+    EndIf 
+    ProcedureReturn IconPath.s
+  EndIf 
+EndProcedure
+
+Procedure RegisterApplicationIcon(ApplicationID.s)
+  Protected IconPath.s=GetIconFromCommandLine()
+  If  IconPath.s 
+  If   RegWrite("HKEY_CURRENT_USER\SOFTWARE\Classes\" + ApplicationID.s +"\DefaultIcon","",IconPath.s,#REG_SZ)=#ERROR_SUCCESS
+    DebugPrint("Set Icon OK")
+  EndIf
+EndIf
 EndProcedure
 
 Procedure RegisterApplicationID(FilePath.s,FileExt.s,CustomProgramId.s)
-  If  Not  IsAdmin() 
-    DebugPrint("Is Not Admin")
-    PrintN("Need Admin Right To Run This Command")
-    End 1
-  EndIf
-  DebugPrint("Is Admin")
   Protected ApplicationID.s=""
   If  CustomProgramId.s<>""
     ApplicationID.s=CustomProgramId.s
   Else
-    ApplicationID.s=CreateApplicationID(FilePath.s)
-  EndIf 
-  If  ApplicationID.s="" : End 1 : EndIf
+    ApplicationID.s=CreateApplicationID(FilePath.s,FileExt.s)
+  EndIf
+  If  ApplicationID.s="" : DebugPrint("Error Application Create Program Id") : End 1 : EndIf
   DebugPrint("Application Program Id = " + QuoteString(ApplicationID.s))
-  Protected Parameter.s=" /c ASSOC "+FileExt.s+"=" + ApplicationID.s
-  Debug Parameter.s
-  Protected ExitCode=RunCmdCommand(Parameter.s)
-  Debug  ExitCode
-  DebugPrint("ASSOC Return = " + Str(ExitCode))
-  If  ExitCode<>0 : End 1 : EndIf 
-  Parameter.s=" /c FTYPE "+ApplicationID.s+"="+QuoteString(FilePath.s) + " " + QuoteString("%1")
-  Debug Parameter.s
-  ExitCode=RunCmdCommand(Parameter.s)
-  DebugPrint("FTYPE Return = " + Str(ExitCode))
-  Debug  ExitCode
-  If  ExitCode<>0 : End 1 : EndIf 
-  SetFTA(ApplicationID.s,FileExt.s)
-EndProcedure
-
-Procedure UnRegisterApplicationID(FilePath_ApplicationID.s)
-  If  Not  IsAdmin() 
-    DebugPrint("Is Not Admin")
-    PrintN("Need Admin Right To Run This Command")
+  Protected sCommand.s=QuoteString(FilePath.s)+ " " + QuoteString("%1")
+  If  RegWrite("HKEY_CURRENT_USER\SOFTWARE\Classes\" + FileExt.s + "\OpenWithProgids",ApplicationID.s,"",#REG_NONE)=#ERROR_SUCCESS And
+      RegWrite("HKEY_CURRENT_USER\SOFTWARE\Classes\" + ApplicationID.s ,"","",#REG_SZ)=#ERROR_SUCCESS And 
+      RegWrite("HKEY_CURRENT_USER\SOFTWARE\Classes\" + ApplicationID.s +"\shell\open\command","",sCommand.s,#REG_SZ)=#ERROR_SUCCESS
+    DebugPrint("Application Register OK") 
+    RegisterApplicationIcon(ApplicationID.s)
+    SetAssociation(ApplicationID.s,FileExt.s)
+    SHChangeNotify_(#SHCNE_ASSOCCHANGED,#SHCNF_IDLIST,#NUL,#NUL) 
+  Else
+    PrintN("Error Application Register") 
     End 1
   EndIf
+EndProcedure
+
+Procedure UnRegisterApplicationID(FilePath_ApplicationID.s,FileExt.s)
   Protected ApplicationID.s=""
   If  Not FileExist(FilePath_ApplicationID.s) 
     ApplicationID.s=FilePath_ApplicationID.s
   Else
-    ApplicationID.s=CreateApplicationID(FilePath_ApplicationID.s)
+    ApplicationID.s=CreateApplicationID(FilePath_ApplicationID.s,FileExt.s)
   EndIf 
-  
-  Protected RegistryKey.s=ApplicationID.s
-  Protected Ret=Reg_KeyExists(#HKEY_CLASSES_ROOT,RegistryKey.s)
-  If  Ret 
-    Reg_DeleteKeyWithAllSub(#HKEY_CLASSES_ROOT,RegistryKey.s)
-    Ret=Reg_KeyExists(#HKEY_CLASSES_ROOT,RegistryKey.s)
+  DebugPrint("Unregister = " + ApplicationID.s)
+  Protected RegistryKey.s="Software\Classes\" + ApplicationID.s
+  Protected Ret=Reg_KeyExists(#HKEY_CURRENT_USER,RegistryKey.s)
+  Reg_DeleteValue(#HKEY_CURRENT_USER,"Software\Classes\" + FileExt.s + "\OpenWithProgids",ApplicationID.s)
+  DeleteHashRegistryKey(FileExt.s)
+  If  Ret
+    Reg_DeleteKeyWithAllSub(#HKEY_CURRENT_USER,RegistryKey.s)
+    Ret=Reg_KeyExists(#HKEY_CURRENT_USER,RegistryKey.s)
     If  Ret=#True
-      DebugPrint("Key No Deleted = " + "HKEY_CLASSES_ROOT\" + RegistryKey.s)
+      DebugPrint("Key No Deleted = " + "HKEY_CURRENT_USER\" + RegistryKey.s)
     Else
-      DebugPrint("Key Deleted = " + "HKEY_CLASSES_ROOT\" + RegistryKey.s)
+      DebugPrint("Key Deleted = " + "HKEY_CURRENT_USER\" + RegistryKey.s)
     EndIf 
   Else
-    DebugPrint("Key Not Found = " + "HKEY_CLASSES_ROOT\" + RegistryKey.s)
+    DebugPrint("Key Not Found = " + "HKEY_CURRENT_USER\" + RegistryKey.s)
   EndIf
-  
-  ;DebugPrint("Unregister Program Id = " + ApplicationID.s)
-  ;Protected Parameter.s=" /c FTYPE "+ApplicationID.s+"="
-  ;Debug Parameter.s
-  ;Protected ExitCode=RunCmdCommand(Parameter.s)
-  ;Debug  ExitCode
-  ;DebugPrint("FTYPE Return = " + Str(ExitCode))
-  ;If  ExitCode<>0 : End 1 : EndIf
-  
+  SHChangeNotify_(#SHCNE_ASSOCCHANGED,#SHCNF_IDLIST,#NUL,#NUL)
 EndProcedure
-
 
 Procedure Start()
   Protected iNumberOfParameters.i = CountProgramParameters()
   
   
-  If (iNumberOfParameters=0 Or iNumberOfParameters>5);validate number of parameters
+  If (iNumberOfParameters=0 Or iNumberOfParameters>6);validate number of parameters
     PrintHelp()
     End 1 
   EndIf 
@@ -1246,14 +1184,15 @@ Procedure Start()
   EndIf
   
   If  (ProgramParameter(0)="-u" Or ProgramParameter(0)="--unreg") ;validate -u parameter
-    UnRegisterApplicationID(ProgramParameter(1))
+    UnRegisterApplicationID(ProgramParameter(1),ProgramParameter(2))
     End 0
   EndIf
   
   
   If iNumberOfParameters>=3 And (ProgramParameter(0)="-r" Or ProgramParameter(0)="--reg") ;validate -r parameter
     Define CustomProgramId.s=""
-    If iNumberOfParameters>=4 And ProgramParameter(3)<>"-d" And ProgramParameter(3)<>"--debug"
+    If iNumberOfParameters>=3 And ProgramParameter(3)<>"-d" And ProgramParameter(3)<>"--debug" And 
+       ProgramParameter(3)<>"-i" And ProgramParameter(3)<>"--icon"
       CustomProgramId.s=ProgramParameter(3)
     EndIf
     RegisterApplicationID(ProgramParameter(1),ProgramParameter(2),CustomProgramId.s)
@@ -1261,12 +1200,13 @@ Procedure Start()
   EndIf
   
   
-  If  iNumberOfParameters>=2 And iNumberOfParameters<=3
-    ;SetFTA
+  If  iNumberOfParameters>=2
+    ;Set FileType/Protocol Association
     Define ProgramId.s,Extension.s
     ProgramId=ProgramParameter(0)
     Extension=ProgramParameter(1)
-    SetFTA(ProgramId,Extension)
+    RegisterApplicationIcon(ProgramId)
+    SetAssociation(ProgramId,Extension)
     End 0
   EndIf 
   
@@ -1314,10 +1254,9 @@ If OpenConsole()
   CheckValidOS()
   Start()
 EndIf
-
 ; IDE Options = PureBasic 5.62 (Windows - x86)
 ; ExecutableFormat = Console
-; Folding = ----------
+; Folding = -----------
 ; EnableXP
 ; UseIcon = Icon.ico
 ; Executable = ..\Compiled\SFTA.exe
