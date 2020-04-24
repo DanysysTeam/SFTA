@@ -1,12 +1,12 @@
 ﻿
 ;  Copyright
-; 	Copyright 2018 Danysys. <danysys.com>
+; 	Copyright 2020 Danysys. <danysys.com>
 ;  Copyright
 ; 
 ;  Information
 ; 	Author(s)......: Danyfirex & Dany3j
 ; 	Description....: Set Windows 8/10 File Type Association
-; 	Version........: 1.2.1
+; 	Version........: 1.3.0
 ;  Information
 ;
 ;  Resources & Credits
@@ -956,7 +956,7 @@ Procedure PrintHelp()
   PrintN("##   |  \  _   _      _     _   ##")
   PrintN("##   |__/ (_| | ) \/ _) \/ _)   ##")
   PrintN("##                /     /       ##")
-  PrintN("##     © 2019 Danysys.com       ##")
+  PrintN("##     © 2020 Danysys.com       ##")
   PrintN("##        SFTA v."+ #SFTA_VERSION +"          ##")
   PrintN("##################################")
   PrintN("")
@@ -1308,22 +1308,22 @@ If OpenConsole()
 EndIf
 ; IDE Options = PureBasic 5.62 (Windows - x86)
 ; ExecutableFormat = Console
-; CursorPosition = 1307
-; FirstLine = 1279
+; CursorPosition = 958
+; FirstLine = 943
 ; Folding = ----------
 ; EnableXP
 ; UseIcon = Icon.ico
 ; Executable = ..\Compiled\SFTA.exe
 ; EnableExeConstant
 ; IncludeVersionInfo
-; VersionField0 = 1.1.0
-; VersionField1 = 1.1.0
+; VersionField0 = 1.3.0
+; VersionField1 = 1.3.0
 ; VersionField2 = Danysys
 ; VersionField3 = SFTA
-; VersionField4 = 1.1.0
-; VersionField5 = 1.1.0
+; VersionField4 = 1.3.0
+; VersionField5 = 1.3.0
 ; VersionField6 = Set Windows 8/10 File Type Association
 ; VersionField7 = SFTA
 ; VersionField8 = SFTA
-; VersionField9 = © 2018 Danysys
-; VersionField10 = © 2018 Danysys
+; VersionField9 = © 2020 Danysys
+; VersionField10 = © 2020 Danysys
