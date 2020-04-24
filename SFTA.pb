@@ -82,11 +82,12 @@ Procedure.s RegSub(iKey.s)
   ProcedureReturn r
 EndProcedure
 
-Procedure RegWrite(iKey.s, iName.s, iValue.s, iType.i, iForceBit = 0)
+Procedure.i RegWrite(iKey.s, iName.s, iValue.s, iType.i, iForceBit = 0)
   ; Sets registry item to value
   ; iForceBit: 32 or 64 returns 32 or 64 bit registry on a 64 bit system
   Protected h.i, rootKey.i, subKey.s, v.i, datSize.i, *dat, hex.s, oct.i, i.i
   Protected *src, c.c, pos.i
+  Protected Ret.i
   
   rootKey = RegRoot(iKey)
   subKey = RegSub(iKey)
@@ -99,23 +100,29 @@ Procedure RegWrite(iKey.s, iName.s, iValue.s, iType.i, iForceBit = 0)
     ;If RegOpenKeyEx_(rootKey, subKey, 0, #KEY_WRITE | iForceBit, @h) = #ERROR_SUCCESS
     Select iType
       Case #REG_SZ, #REG_EXPAND_SZ
-        RegSetValueEx_(h, iName, 0, iType, @iValue, StringByteLength(iValue))
+        Ret=RegSetValueEx_(h, iName, 0, iType, @iValue, StringByteLength(iValue))
       Case #REG_DWORD
         v = Val(iValue)
-        RegSetValueEx_(h, iName, 0, iType, @v, 4)
+        Ret=RegSetValueEx_(h, iName, 0, iType, @v, 4)
       Case #REG_QWORD
         v = Val(iValue)
-        RegSetValueEx_(h, iName, 0, iType, @v, 8)        
+        Ret=RegSetValueEx_(h, iName, 0, iType, @v, 8)        
       Case #REG_BINARY
         datSize = Len(iValue) / 2
-        *dat = AllocateMemory(datSize)
-        For i = 0 To datSize - 1
-          hex = "$" + Mid(iValue, (i * 2) + 1, 2)
-          oct = Val(hex)
-          PokeB(*dat + i, oct)
-        Next
-        RegSetValueEx_(h, iName, 0, iType, *dat, datSize)
-        FreeMemory(*dat)
+        If  datSize
+          *dat = AllocateMemory(datSize)
+          For i = 0 To datSize - 1
+            hex = "$" + Mid(iValue, (i * 2) + 1, 2)
+            oct = Val(hex)
+            PokeB(*dat + i, oct)
+          Next
+          Ret=RegSetValueEx_(h, iName, 0, iType, *dat, datSize)
+          FreeMemory(*dat)
+        Else
+          Ret=RegSetValueEx_(h, iName, 0, iType, #NUL, 0) ;Allow Binary Key with Empty Value
+        EndIf
+      Case  #REG_NONE
+        RegSetValueEx_(h, iName, 0, iType, #NUL, 0) ;Allow None
       Case #REG_MULTI_SZ
         datSize = StringByteLength(iValue) + #CHAR_SIZE
         *dat = AllocateMemory(datSize)
@@ -132,11 +139,12 @@ Procedure RegWrite(iKey.s, iName.s, iValue.s, iType.i, iForceBit = 0)
           EndIf 
         Next
         PokeC(*dat + pos, 0)
-        RegSetValueEx_(h, iName, 0, iType, *dat, pos)
+        Ret=RegSetValueEx_(h, iName, 0, iType, *dat, pos)
         FreeMemory(*dat)
     EndSelect
     RegCloseKey_(h)
   EndIf
+  ProcedureReturn Ret
 EndProcedure
 
 Procedure.s RegRead(iKey.s, iValue.s, iForceBit = 0)
@@ -1306,10 +1314,9 @@ If OpenConsole()
   CheckValidOS()
   Start()
 EndIf
+
 ; IDE Options = PureBasic 5.62 (Windows - x86)
 ; ExecutableFormat = Console
-; CursorPosition = 958
-; FirstLine = 943
 ; Folding = ----------
 ; EnableXP
 ; UseIcon = Icon.ico
