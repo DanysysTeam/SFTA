@@ -6,6 +6,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## 1.3.0 - 2020-04-24
+### Added
+- Add Protocol Support
+- Add Icon Support for File Type
+
+
 ## 1.2.1 - 2019-12-13
 ### Added
 - Add --list Show All Application Program Id
