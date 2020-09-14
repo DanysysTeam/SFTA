@@ -6,25 +6,50 @@
 ;  Information
 ; 	Author(s)......: Danyfirex & Dany3j
 ; 	Description....: Set Windows 8/10 File Type Association
-; 	Version........: 1.3.0
+; 	Version........: 1.3.1
 ;  Information
 ;
 ;  Resources & Credits
 ;  https://bbs.pediy.com/thread-213954.htm
+;  LMongrain - Hash Algorithm
 ;  Resources & Credits
 
 
 EnableExplicit
 
-Import "Hash.a"  
-  GenerateHash.i (value1.l, value2.l,value3.l,value4.l) As "_HASH@16" ;Internal Hash Function
-EndImport
 
-#SFTA_VERSION="1.3.0"
+#SFTA_VERSION="1.3.1"
 Global g_Debug=#False
 
 #SHCNE_ASSOCCHANGED=$8000000
 #SHCNF_IDLIST=0
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;Hash Algorithm Map
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+Structure HashMap
+  *pUData
+  Cache.l
+  Counter.l
+  Index.l
+  MD5Bytes1.l
+  MD5Bytes2.l
+  OutHash1.l
+  OutHash2.l
+  Reckon0.l
+  Reckon1.l[2]
+  Reckon2.l[2]
+  Reckon3.l
+  Reckon4.l[2]
+  Reckon5.l[2]
+  Reckon6.l[2]
+  Reckon7.l[3]
+  Reckon8.l
+  Reckon9.l[3]
+EndStructure
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;Hash Algorithm Map
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;Registry Management
@@ -757,6 +782,124 @@ EndProcedure
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;Hash Algorithm - by LMongrain
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+Procedure Shr32(value.l, count.l = 1)
+  ; Bitwise Shift Function
+  ; It will shift the value a number of bits to the right.
+  ; Bits coming in from left are always 0
+  !mov eax, dword [p.v_value]
+  !mov ecx, dword [p.v_count]
+  !shr eax, cl
+  ProcedureReturn
+EndProcedure
+
+Procedure.i Hash1(*pWStr, iHLen.l, *aMD5DigestBytes, *aOutHash)
+  Protected result = #False
+  Protected HM1.HashMap
+  HM1\Cache = 0
+  HM1\OutHash1 = 0
+  HM1\pUData = *pWStr
+  HM1\MD5Bytes1 = (PeekL(*aMD5DigestBytes) | 1) + $69FB0000
+  HM1\MD5Bytes2 = (PeekL(*aMD5DigestBytes + 4) | 1) + $13DB0000
+  HM1\Index = Shr32((iHLen - 2), 1)
+  HM1\Counter = HM1\Index + 1
+  While HM1\Counter
+    HM1\Reckon0 = PeekL(HM1\pUData) +  HM1\OutHash1
+    HM1\Reckon1[0] = PeekL(HM1\pUData + 4)
+    HM1\pUData = HM1\pUData + 8
+    HM1\Reckon2[0] = HM1\Reckon0 * HM1\MD5Bytes1 - $10FA9605 * Shr32(HM1\Reckon0, 16)
+    HM1\Reckon2[1] = $79F8A395 * HM1\Reckon2[0] + $689B6B9F * Shr32(HM1\Reckon2[0], 16)
+    HM1\Reckon3 = $EA970001 * HM1\Reckon2[1] - $3C101569 * Shr32(HM1\Reckon2[1], 16)
+    HM1\Reckon4[0] = HM1\Reckon3 + HM1\Reckon1[0]
+    HM1\Reckon5[0] = HM1\Cache + HM1\Reckon3
+    HM1\Reckon6[0] = HM1\Reckon4[0] * HM1\MD5Bytes2 - $3CE8EC25 * Shr32(HM1\Reckon4[0], 16)
+    HM1\Reckon6[1] = $59C3AF2D * HM1\Reckon6[0] - $2232E0F1 * Shr32(HM1\Reckon6[0], 16)
+    HM1\OutHash1 = $1EC90001 * HM1\Reckon6[1] + $35BD1EC9 * Shr32(HM1\Reckon6[1], 16)
+    HM1\OutHash2 = HM1\Reckon5[0] + HM1\OutHash1
+    HM1\Cache = HM1\OutHash2
+    HM1\Counter = HM1\Counter - 1
+  Wend
+  If (iHLen - 2) - (HM1\Index * 2) = 1
+    HM1\Reckon7[0] = PeekL(*pWStr + (8 * HM1\Index + 8)) + HM1\OutHash1
+    HM1\Reckon7[1] = HM1\Reckon7[0] * HM1\MD5Bytes1 - $10FA9605 * Shr32(HM1\Reckon7[0], 16)
+    HM1\Reckon7[2] = $79F8A395 * HM1\Reckon7[1] + $689B6B9F * Shr32(HM1\Reckon7[1], 16)
+    HM1\Reckon8 = $EA970001 * HM1\Reckon7[2] - $3C101569 * Shr32(HM1\Reckon7[2], 16)
+    HM1\Reckon9[0] = HM1\Reckon8 * HM1\MD5Bytes2 - $3CE8EC25 * Shr32(HM1\Reckon8, 16)
+    HM1\Reckon9[1] = $59C3AF2D * HM1\Reckon9[0] - $2232E0F1 * Shr32(HM1\Reckon9[0], 16)
+    HM1\OutHash1 = $1EC90001 * HM1\Reckon9[1] + $35BD1EC9 * Shr32(HM1\Reckon9[1], 16)
+    HM1\OutHash2 = HM1\OutHash1 + HM1\Cache + HM1\Reckon8
+  EndIf
+  PokeL(*aOutHash, HM1\OutHash1)
+  PokeL(*aOutHash + 4, HM1\OutHash2)
+  result = #True
+  ProcedureReturn result
+EndProcedure
+
+Procedure.i Hash2(*pWStr, iHLen.l, *aMD5DigestBytes, *aOutHash)
+  Protected result = #False
+  Protected HM2.HashMap 
+  HM2\Cache = 0
+  HM2\OutHash1 = 0
+  HM2\pUData = *pWStr
+  HM2\MD5Bytes1 = (PeekL(*aMD5DigestBytes) | 1)
+  HM2\MD5Bytes2 = (PeekL(*aMD5DigestBytes + 4) | 1)
+  HM2\Index = Shr32((iHLen - 2), 1)
+  HM2\Counter = HM2\Index + 1
+  While HM2\Counter
+    HM2\Reckon0 = PeekL(HM2\pUData) +  HM2\OutHash1
+    HM2\pUData = HM2\pUData + 8
+    HM2\Reckon1[0] = HM2\Reckon0 * HM2\MD5Bytes1
+    HM2\Reckon1[1] = $B1110000 * HM2\Reckon1[0] - $30674EEF * Shr32(HM2\Reckon1[0], 16)
+    HM2\Reckon2[0] = $5B9F0000 * HM2\Reckon1[1] - $78F7A461 * Shr32(HM2\Reckon1[1], 16)
+    HM2\Reckon2[1] = $12CEB96D * Shr32(HM2\Reckon2[0], 16) - $46930000 * HM2\Reckon2[0]
+    HM2\Reckon3 = $1D830000 * HM2\Reckon2[1] + $257E1D83 * Shr32(HM2\Reckon2[1], 16)
+    HM2\Reckon4[0] = HM2\MD5Bytes2 * (HM2\Reckon3 + PeekL(HM2\pUData - 4))
+    HM2\Reckon4[1] = $16F50000 * HM2\Reckon4[0] - ($5D8BE90B * Shr32(HM2\Reckon4[0], 16))
+    HM2\Reckon5[0] = $96FF0000 * HM2\Reckon4[1] - $2C7C6901 * Shr32(HM2\Reckon4[1], 16)
+    HM2\Reckon5[1] = $2B890000 * HM2\Reckon5[0] + $7C932B89 * Shr32(HM2\Reckon5[0], 16)
+    HM2\OutHash1 = $9F690000 * HM2\Reckon5[1] - $405B6097 * Shr32(HM2\Reckon5[1], 16)
+    HM2\OutHash2 = HM2\OutHash1 + HM2\Cache + HM2\Reckon3
+    HM2\Cache = HM2\OutHash2
+    HM2\Counter = HM2\Counter - 1
+  Wend
+  If (iHLen - 2) - (HM2\Index * 2) = 1
+    HM2\Reckon6[0] = (PeekL(*pWStr + (8 * HM2\Index + 8)) + HM2\OutHash1) * HM2\MD5Bytes1
+    HM2\Reckon6[1] = $B1110000 * HM2\Reckon6[0] - $30674EEF * Shr32(HM2\Reckon6[0], 16)
+    HM2\Reckon7[0] = $5B9F0000 * HM2\Reckon6[1] - $78F7A461 * Shr32(HM2\Reckon6[1], 16)
+    HM2\Reckon7[1] = $12CEB96D * Shr32(HM2\Reckon7[0], 16) - $46930000 * HM2\Reckon7[0]
+    HM2\Reckon8 = $1D830000 * HM2\Reckon7[1] + $257E1D83 * Shr32(HM2\Reckon7[1], 16)
+    HM2\Reckon9[0] = $16F50000 * HM2\Reckon8 * HM2\MD5Bytes2 - ($5D8BE90B * Shr32(HM2\Reckon8 * HM2\MD5Bytes2, 16))
+    HM2\Reckon9[1] = $96FF0000 * HM2\Reckon9[0] - $2C7C6901 * Shr32(HM2\Reckon9[0], 16)
+    HM2\Reckon9[2] = $2B890000 * HM2\Reckon9[1] + $7C932B89 * Shr32(HM2\Reckon9[1], 16)
+    HM2\OutHash1 = $9F690000 * HM2\Reckon9[2] - $405B6097 * Shr32(HM2\Reckon9[2], 16)
+    HM2\OutHash2 = HM2\OutHash1 + HM2\Cache + HM2\Reckon8
+  EndIf
+  PokeL(*aOutHash, HM2\OutHash1)
+  PokeL(*aOutHash + 4, HM2\OutHash2)
+  result = #True
+  ProcedureReturn result
+EndProcedure
+
+Procedure.i GenerateHash(*pWStr, iLen.l, *aMD5DigestBytes, *aOutBytes)  
+  Protected Dim aOutHash.i(3) ; 16 Bytes
+  Protected *aOutHash = @aOutHash()
+  Protected iHLen.l = Bool((iLen & 4) < 1) + Shr32(iLen, 2) - 1
+  If (iHLen <= 1 Or iHLen & 1 Or 
+      Hash1(*pWStr, iHLen, *aMD5DigestBytes, *aOutHash + 0) = #False Or 
+      Hash2(*pWStr, iHLen, *aMD5DigestBytes, *aOutHash + 8) = #False)
+    ProcedureReturn #False
+  EndIf
+  PokeL(*aOutBytes, PeekL(*aOutHash + 8) ! PeekL(*aOutHash + 0))
+  PokeL(*aOutBytes + 4, PeekL(*aOutHash + 12) ! PeekL(*aOutHash + 4))
+  ProcedureReturn #True
+EndProcedure
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;Hash Algorithm - by LMongrain
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;Create ProgId Hash
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -1256,18 +1399,19 @@ If OpenConsole()
 EndIf
 ; IDE Options = PureBasic 5.62 (Windows - x86)
 ; ExecutableFormat = Console
-; Folding = -----------
+; CursorPosition = 13
+; Folding = ------------
 ; EnableXP
 ; UseIcon = Icon.ico
 ; Executable = ..\Compiled\SFTA.exe
 ; EnableExeConstant
 ; IncludeVersionInfo
-; VersionField0 = 1.3.0
-; VersionField1 = 1.3.0
+; VersionField0 = 1.3.1
+; VersionField1 = 1.3.1
 ; VersionField2 = Danysys
 ; VersionField3 = SFTA
-; VersionField4 = 1.3.0
-; VersionField5 = 1.3.0
+; VersionField4 = 1.3.1
+; VersionField5 = 1.3.1
 ; VersionField6 = Set Windows 8/10 File Type Association
 ; VersionField7 = SFTA
 ; VersionField8 = SFTA
