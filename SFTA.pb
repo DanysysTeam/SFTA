@@ -1,6 +1,6 @@
 ﻿
 ;  Copyright
-; 	Copyright 2020 Danysys. <danysys.com>
+; 	Copyright 2021 Danysys. <danysys.com>
 ;  Copyright
 ; 
 ;  Information
@@ -1399,7 +1399,7 @@ If OpenConsole()
 EndIf
 ; IDE Options = PureBasic 5.62 (Windows - x86)
 ; ExecutableFormat = Console
-; CursorPosition = 13
+; CursorPosition = 2
 ; Folding = ------------
 ; EnableXP
 ; UseIcon = Icon.ico
